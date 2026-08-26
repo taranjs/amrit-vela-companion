@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A quiet companion for rising in amrit vela — wake early, hold one intention, sit with the Naam, and reflect at night.">
+<meta name="theme-color" content="#0D0E24">
+<title>Amrit Vela</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root{
+  --night:#0D0E24;
+  --vela:#2B2F63;
+  --gold:#D4A24E;
+  --day:#F5F0E6;
+  --violet:#7A6FA3;
+  --ink:#2A2740;
+
+  /* Band-relative tokens. updateSky() puts data-band on <html>; these flip
+     with it, so text and surfaces stay readable against every sky. */
+  --fg:var(--day);       /* body text */
+  --fg-rgb:245,240,230;  /* the same colour, for rgba() borders + surfaces */
+  --accent:var(--gold);  /* streak numbers, dates, the breathing circle */
+  color-scheme:dark;     /* native time picker follows the sky */
+}
+
+html[data-band="dawn"], html[data-band="day"]{
+  --fg:var(--ink);
+  --fg-rgb:42,39,64;
+  --accent:#8A5F17;      /* deeper amber; --gold fails contrast on cream */
+  color-scheme:light;
+}
+
+*{box-sizing:border-box; margin:0; padding:0;}
+
+body{
+  font-family:'Inter', sans-serif;
+  min-height:100vh;
+  color:var(--fg);
+  transition:background 2s ease, color 2s ease;
+  overflow-x:hidden;
+}
+
+#sky{
+  position:fixed; inset:0; z-index:-1;
+  transition:background 3s ease;
+}
+
+.stars{position:fixed; inset:0; z-index:-1; opacity:0.6; pointer-events:none; transition:opacity 2s ease;}
+html[data-band="dawn"] .stars, html[data-band="day"] .stars{opacity:0;}
+.star{position:absolute; width:2px; height:2px; background:#fff; border-radius:50%; opacity:0;}
+
+main{
+  max-width:640px;
+  margin:0 auto;
+  padding:64px 24px 100px;
+}
+
+.eyebrow{
+  font-family:'JetBrains Mono', monospace;
+  font-size:12px;
+  letter-spacing:0.15em;
+  text-transform:uppercase;
+  opacity:0.7;
+  margin-bottom:12px;
+}
+
+h1{
+  font-family:'Fraunces', serif;
+  font-size:clamp(36px, 8vw, 56px);
+  font-weight:500;
+  line-height:1.05;
+  margin-bottom:8px;
+}
+
+.gurmukhi{
+  font-size:0.5em;
+  display:block;
+  opacity:0.75;
+  font-weight:400;
+  margin-bottom:6px;
+}
+
+.lede{
+  font-size:16px;
+  line-height:1.6;
+  opacity:0.85;
+  max-width:46ch;
+  margin-bottom:8px;
+}
+
+.clock{
+  font-family:'JetBrains Mono', monospace;
+  font-size:14px;
+  opacity:0.6;
+  margin-top:20px;
+}
+
+section{
+  margin-top:56px;
+  padding-top:40px;
+  border-top:1px solid rgba(var(--fg-rgb),0.15);
+}
+
+h2{
+  font-family:'Fraunces', serif;
+  font-size:22px;
+  font-weight:500;
+  margin-bottom:6px;
+}
+
+.sub{
+  font-size:14px;
+  opacity:0.7;
+  margin-bottom:24px;
+  line-height:1.5;
+}
+
+/* Wake check-in */
+.wake-row{
+  display:flex;
+  align-items:center;
+  gap:16px;
+  flex-wrap:wrap;
+}
+
+button{
+  font-family:'Inter', sans-serif;
+  font-weight:600;
+  font-size:14px;
+  border:none;
+  border-radius:100px;
+  padding:14px 28px;
+  cursor:pointer;
+  transition:transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+button:focus-visible{
+  outline:2px solid var(--accent);
+  outline-offset:3px;
+}
+
+.btn-primary{
+  background:var(--gold);
+  color:var(--night);
+}
+.btn-primary:hover{ transform:translateY(-1px); box-shadow:0 6px 20px rgba(212,162,78,0.35); }
+.btn-primary:disabled{ opacity:0.5; cursor:default; transform:none; box-shadow:none; }
+
+.btn-ghost{
+  background:transparent;
+  color:var(--fg);
+  border:1px solid rgba(var(--fg-rgb),0.3);
+}
+.btn-ghost:hover{ border-color:var(--accent); color:var(--accent); }
+
+.streak-box{
+  display:flex;
+  gap:28px;
+  margin-top:24px;
+}
+.streak-num{
+  font-family:'JetBrains Mono', monospace;
+  font-size:32px;
+  color:var(--accent);
+}
+.streak-label{
+  font-size:12px;
+  opacity:0.65;
+  text-transform:uppercase;
+  letter-spacing:0.08em;
+  margin-top:2px;
+}
+
+.target-row{
+  margin-top:20px;
+  font-size:13px;
+  opacity:0.75;
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.target-row input{
+  font-family:'JetBrains Mono', monospace;
+  background:rgba(var(--fg-rgb),0.08);
+  border:1px solid rgba(var(--fg-rgb),0.25);
+  color:var(--fg);
+  border-radius:6px;
+  padding:4px 8px;
+  font-size:13px;
+}
+
+/* Simran timer */
+.breathe-wrap{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:20px;
+  padding:20px 0;
+}
+
+.breathe-circle{
+  width:140px; height:140px;
+  border-radius:50%;
+  border:1.5px solid var(--accent);
+  background:radial-gradient(circle, rgba(212,162,78,0.18), transparent 70%);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-family:'Fraunces', serif;
+  font-size:16px;
+  color:var(--accent);
+  transition:transform 4s ease-in-out;
+}
+.breathe-circle.running{
+  animation:breathe 8s ease-in-out infinite;
+}
+@keyframes breathe{
+  0%{ transform:scale(1); }
+  50%{ transform:scale(1.35); }
+  100%{ transform:scale(1); }
+}
+
+.sim-stats{
+  font-family:'JetBrains Mono', monospace;
+  font-size:13px;
+  opacity:0.75;
+  text-align:center;
+}
+
+/* Sankalp / intention */
+textarea, .journal-input{
+  width:100%;
+  font-family:'Inter', sans-serif;
+  font-size:15px;
+  line-height:1.5;
+  background:rgba(var(--fg-rgb),0.07);
+  border:1px solid rgba(var(--fg-rgb),0.25);
+  color:var(--fg);
+  border-radius:10px;
+  padding:14px;
+  resize:vertical;
+  min-height:64px;
+}
+textarea::placeholder{ color:rgba(var(--fg-rgb),0.45); }
+textarea:focus, .journal-input:focus{ outline:2px solid var(--accent); outline-offset:2px; }
+
+.field{ margin-bottom:16px; }
+.field label{
+  display:block;
+  font-size:13px;
+  opacity:0.75;
+  margin-bottom:6px;
+}
+
+.save-row{
+  display:flex;
+  align-items:center;
+  gap:14px;
+  margin-top:12px;
+}
+.saved-note{
+  font-size:12px;
+  opacity:0.6;
+  font-family:'JetBrains Mono', monospace;
+}
+
+/* History */
+.history-item{
+  padding:14px 0;
+  border-bottom:1px solid rgba(var(--fg-rgb),0.1);
+  font-size:14px;
+}
+.history-date{
+  font-family:'JetBrains Mono', monospace;
+  font-size:12px;
+  color:var(--accent);
+  margin-bottom:4px;
+}
+.history-empty{
+  font-size:13px;
+  opacity:0.55;
+  font-style:italic;
+}
+
+footer{
+  text-align:center;
+  font-size:12px;
+  opacity:0.5;
+  margin-top:70px;
+  font-family:'JetBrains Mono', monospace;
+}
+
+@media (prefers-reduced-motion: reduce){
+  .breathe-circle.running{ animation:none; }
+  button{ transition:none; }
+}
+</style>
+</head>
+<body>
+
+<div id="sky"></div>
+<div class="stars" id="stars"></div>
+
+<main>
+  <div class="eyebrow" id="eyebrow">amrit vela · morning companion</div>
+  <h1><span class="gurmukhi">ਅੰਮ੍ਰਿਤ ਵੇਲਾ</span>Amrit Vela</h1>
+  <p class="lede" id="greeting">The hours before dawn, held quiet for remembrance. Wake into them, and the whole day tends to follow.</p>
+  <div class="clock" id="liveClock">--:--</div>
+
+  <section>
+    <h2>Wake check-in</h2>
+    <p class="sub">Log the moment you're up. A streak forms when you rise at or before your target time.</p>
+    <div class="wake-row">
+      <button class="btn-primary" id="checkInBtn">I'm up</button>
+      <span class="saved-note" id="checkInStatus"></span>
+    </div>
+    <div class="target-row">
+      Target wake time:
+      <input type="time" id="targetTime" value="05:00">
+    </div>
+    <div class="streak-box">
+      <div>
+        <div class="streak-num" id="streakNum">0</div>
+        <div class="streak-label">day streak</div>
+      </div>
+      <div>
+        <div class="streak-num" id="totalNum">0</div>
+        <div class="streak-label">total check-ins</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Simran</h2>
+    <p class="sub">A few quiet minutes with the Naam. Let your breath carry "Waheguru" — in on the first syllable, out on the second. Tap start when you're ready.</p>
+    <div class="breathe-wrap">
+      <div class="breathe-circle" id="breatheCircle">Waheguru</div>
+      <div class="sim-stats" id="simStats">0:00 this session · 0 min logged today</div>
+      <div>
+        <button class="btn-primary" id="simStart">Start</button>
+        <button class="btn-ghost" id="simStop" style="display:none;">Finish & log</button>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Today's sankalp</h2>
+    <p class="sub">One intention to carry through the day. Short is fine.</p>
+    <div class="field">
+      <textarea id="intentionInput" placeholder="e.g. I will meet today's irritations with patience, not reaction."></textarea>
+    </div>
+    <div class="save-row">
+      <button class="btn-primary" id="saveIntention">Save intention</button>
+      <span class="saved-note" id="intentionStatus"></span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Evening reflection</h2>
+    <p class="sub">Three lines before you sleep. This becomes your record of the days you're actually living toward Waheguru, not just planning to.</p>
+    <div class="field">
+      <label>Where did I notice Waheguru's presence today?</label>
+      <textarea id="r1" placeholder="A moment, a person, a feeling..."></textarea>
+    </div>
+    <div class="field">
+      <label>What am I grateful for?</label>
+      <textarea id="r2"></textarea>
+    </div>
+    <div class="field">
+      <label>What will I do differently tomorrow?</label>
+      <textarea id="r3"></textarea>
+    </div>
+    <div class="save-row">
+      <button class="btn-primary" id="saveReflection">Save today's reflection</button>
+      <span class="saved-note" id="reflectionStatus"></span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Your last 7 days</h2>
+    <div id="historyList"><div class="history-empty">Nothing logged yet — your history builds as you go.</div></div>
+  </section>
+
+  <footer>rise early · sit quiet · carry it through the day</footer>
+</main>
+
+<script>
+const STORAGE_KEY = 'amrit-vela-data';
+let state = { wakeLog: [], intentions: {}, reflections: {}, meditation: {}, targetTime: '05:00' };
+let sessionSeconds = 0;
+let simInterval = null;
+let simRunning = false;
+
+// Local calendar date, deliberately NOT toISOString() — that returns the UTC
+// date, so a 4am check-in east of UTC would land on the previous day. Amrit
+// vela is defined by where you are, so the day must be too.
+function dateStr(d){
+  return d.getFullYear() + '-'
+    + String(d.getMonth()+1).padStart(2,'0') + '-'
+    + String(d.getDate()).padStart(2,'0');
+}
+
+function todayStr(){
+  return dateStr(new Date());
+}
+
+function esc(s){
+  return String(s).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+}
+
+async function loadState(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw){
+      const saved = JSON.parse(raw);
+      state = Object.assign(state, saved);
+      state.wakeLog = state.wakeLog || [];
+      state.intentions = state.intentions || {};
+      state.reflections = state.reflections || {};
+      state.meditation = state.meditation || {};
+      state.targetTime = state.targetTime || '05:00';
+    }
+  }catch(e){
+    // first run, or storage unavailable — the defaults stand
+  }
+  render();
+}
+
+// Returns true only if the write actually landed, so the UI never claims
+// "Saved" when nothing was saved (private windows and full disks both throw).
+async function saveState(){
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    return true;
+  }catch(e){
+    console.error('Could not save', e);
+    return false;
+  }
+}
+
+function flash(el, ok){
+  el.textContent = ok ? 'Saved \u2713' : 'Could not save \u2014 storage is unavailable in this browser';
+  if(ok) setTimeout(() => { el.textContent = ''; }, 2000);
+}
+
+// ---- Sky gradient tied to real time ----
+function updateSky(){
+  const now = new Date();
+  const h = now.getHours() + now.getMinutes()/60;
+  let band, bg, eyebrow, greeting;
+
+  // 0-3 night, 3-6 amrit vela, 6-9 dawn, 9-19 day, 19-24 night
+  if(h >= 3 && h < 6){
+    band = 'vela';
+    bg = 'linear-gradient(180deg, #0D0E24 0%, #2B2F63 60%, #4A3D6B 100%)';
+    eyebrow = 'amrit vela · right now';
+    greeting = "This is it — the quiet hour. If you're reading this now, you're already where you meant to be.";
+  } else if(h >= 6 && h < 9){
+    band = 'dawn';
+    bg = 'linear-gradient(180deg, #E8C88F 0%, #F2E3C8 45%, #F5F0E6 100%)';
+    eyebrow = 'dawn';
+    greeting = "The light is breaking. Whatever you sat with in the dark, carry it forward now.";
+  } else if(h >= 9 && h < 19){
+    band = 'day';
+    bg = 'linear-gradient(180deg, #F5F0E6 0%, #EDE4D0 100%)';
+    eyebrow = 'daylight';
+    greeting = "Midday. Come back here tonight for a short reflection, and set tomorrow's target wake time.";
+  } else {
+    band = 'night';
+    bg = 'linear-gradient(180deg, #1A1B3A 0%, #0D0E24 100%)';
+    eyebrow = 'night';
+    greeting = "Wind down early — amrit vela rewards an early sleep more than anything else.";
+  }
+
+  document.documentElement.dataset.band = band;
+  document.getElementById('sky').style.background = bg;
+  document.getElementById('eyebrow').textContent = eyebrow;
+  document.getElementById('greeting').textContent = greeting;
+  document.getElementById('liveClock').textContent = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+}
+setInterval(updateSky, 30000);
+
+// ---- Stars (only meaningful at night, kept subtle always) ----
+function makeStars(){
+  const wrap = document.getElementById('stars');
+  for(let i=0;i<40;i++){
+    const s = document.createElement('div');
+    s.className='star';
+    s.style.left = Math.random()*100+'%';
+    s.style.top = Math.random()*60+'%';
+    s.style.opacity = (Math.random()*0.7+0.2).toFixed(2);
+    wrap.appendChild(s);
+  }
+}
+
+// ---- Wake check-in ----
+function computeStreak(){
+  const target = state.targetTime || '05:00';
+  const [th, tm] = target.split(':').map(Number);
+  const byDate = {};
+  state.wakeLog.forEach(e => { byDate[e.date] = e.time; });
+
+  let streak = 0;
+  let d = new Date();
+  // if no check-in today yet, start counting from yesterday
+  if(!byDate[todayStr()]) d.setDate(d.getDate()-1);
+
+  while(true){
+    const ds = dateStr(d);
+    const t = byDate[ds];
+    if(!t) break;
+    const [eh, em] = t.split(':').map(Number);
+    if(eh*60+em <= th*60+tm){
+      streak++;
+      d.setDate(d.getDate()-1);
+    } else break;
+  }
+  return streak;
+}
+
+function renderWake(){
+  const today = todayStr();
+  const already = state.wakeLog.find(e => e.date === today);
+  document.getElementById('checkInBtn').disabled = !!already;
+  document.getElementById('checkInStatus').textContent = already ? `Logged today at ${already.time}` : '';
+  document.getElementById('streakNum').textContent = computeStreak();
+  document.getElementById('totalNum').textContent = state.wakeLog.length;
+}
+
+document.getElementById('checkInBtn').addEventListener('click', async () => {
+  const today = todayStr();
+  const now = new Date();
+  const time = now.toTimeString().slice(0,5);
+  if(!state.wakeLog.find(e => e.date === today)){
+    state.wakeLog.push({date: today, time});
+    if(!await saveState()){
+      state.wakeLog = state.wakeLog.filter(e => e.date !== today);
+      flash(document.getElementById('checkInStatus'), false);
+      return;
+    }
+  }
+  renderWake();
+  renderHistory();
+});
+
+document.getElementById('targetTime').addEventListener('change', async (e) => {
+  state.targetTime = e.target.value || '05:00';
+  await saveState();
+  renderWake();
+});
+
+// ---- Simran timer ----
+const circle = document.getElementById('breatheCircle');
+document.getElementById('simStart').addEventListener('click', () => {
+  simRunning = true;
+  circle.classList.add('running');
+  document.getElementById('simStart').style.display='none';
+  document.getElementById('simStop').style.display='inline-block';
+  simInterval = setInterval(() => {
+    sessionSeconds++;
+    updateSimStats();
+  }, 1000);
+});
+
+document.getElementById('simStop').addEventListener('click', async () => {
+  simRunning = false;
+  circle.classList.remove('running');
+  clearInterval(simInterval);
+  document.getElementById('simStart').style.display='inline-block';
+  document.getElementById('simStop').style.display='none';
+
+  const minutes = Math.round(sessionSeconds/60);
+  if(minutes > 0){
+    const today = todayStr();
+    state.meditation[today] = (state.meditation[today] || 0) + minutes;
+    await saveState();
+  }
+  sessionSeconds = 0;
+  updateSimStats();
+});
+
+function updateSimStats(){
+  const mins = Math.floor(sessionSeconds/60);
+  const secs = sessionSeconds%60;
+  const todayMins = state.meditation[todayStr()] || 0;
+  document.getElementById('simStats').textContent =
+    `${mins}:${secs.toString().padStart(2,'0')} this session · ${todayMins} min logged today`;
+}
+
+// ---- Intention ----
+document.getElementById('saveIntention').addEventListener('click', async () => {
+  const today = todayStr();
+  const text = document.getElementById('intentionInput').value.trim();
+  state.intentions[today] = text;
+  const ok = await saveState();
+  flash(document.getElementById('intentionStatus'), ok);
+});
+
+// ---- Reflection ----
+document.getElementById('saveReflection').addEventListener('click', async () => {
+  const today = todayStr();
+  state.reflections[today] = {
+    presence: document.getElementById('r1').value.trim(),
+    gratitude: document.getElementById('r2').value.trim(),
+    tomorrow: document.getElementById('r3').value.trim(),
+  };
+  const ok = await saveState();
+  flash(document.getElementById('reflectionStatus'), ok);
+  renderHistory();
+});
+
+// ---- History ----
+function renderHistory(){
+  const list = document.getElementById('historyList');
+  const dates = new Set([
+    ...Object.keys(state.reflections),
+    ...Object.keys(state.intentions),
+  ]);
+  const sorted = [...dates].sort().reverse().slice(0,7);
+
+  if(sorted.length === 0){
+    list.innerHTML = '<div class="history-empty">Nothing logged yet — your history builds as you go.</div>';
+    return;
+  }
+
+  list.innerHTML = sorted.map(date => {
+    const intention = state.intentions[date];
+    const refl = state.reflections[date];
+    const wake = state.wakeLog.find(e => e.date === date);
+    let parts = [];
+    if(wake) parts.push(`Woke at ${esc(wake.time)}`);
+    if(intention) parts.push(`Intention: ${esc(intention)}`);
+    if(refl && refl.gratitude) parts.push(`Grateful for: ${esc(refl.gratitude)}`);
+    if(refl && refl.presence) parts.push(`Presence: ${esc(refl.presence)}`);
+    return `<div class="history-item"><div class="history-date">${esc(date)}</div>${parts.join('<br>') || '<span class="history-empty">No details</span>'}</div>`;
+  }).join('');
+}
+
+// ---- Init ----
+makeStars();
+updateSky();
+loadState().then(() => { renderWake(); renderHistory(); });
+
+function render(){
+  renderWake();
+  renderHistory();
+  // repopulate today's fields if they exist
+  const today = todayStr();
+  document.getElementById('targetTime').value = state.targetTime || '05:00';
+  if(state.intentions[today]) document.getElementById('intentionInput').value = state.intentions[today];
+  if(state.reflections[today]){
+    document.getElementById('r1').value = state.reflections[today].presence || '';
+    document.getElementById('r2').value = state.reflections[today].gratitude || '';
+    document.getElementById('r3').value = state.reflections[today].tomorrow || '';
+  }
+}
+</script>
+
+</body>
+</html>
