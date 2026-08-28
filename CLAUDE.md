@@ -35,6 +35,13 @@ state = {
 }
 ```
 
+**Tomorrow's sankalp is not a separate field.** The evening reflection's last
+box writes to `intentions[tomorrowStr()]` — the intention filed under the day
+it's meant for. `render()` then prefills the sankalp box from
+`intentions[todayStr()]` with no extra logic, so last night's resolve is simply
+waiting when you rise. The one consequence: `intentions` can hold a future date,
+which is why `renderHistory()` filters to `d <= today`.
+
 Storage is `localStorage` via `loadState()` / `saveState()`. `saveState()`
 returns a boolean — **keep it that way**. Private windows and full disks both
 throw on write, and the UI must not print "Saved ✓" over a failed write. All
@@ -62,10 +69,17 @@ standing in. `computeStreak()` walks backward with the same helper.
 - Simran timer — 1s `setInterval` over `sessionSeconds`; the breathing circle is
   pure CSS (`@keyframes breathe`, 8s), so it stays smooth regardless of the
   tick. Minutes are added to `state.meditation` on "Finish & log".
-- `renderHistory()` — last 7 dates (union of intention + reflection keys),
-  newest first. **All interpolated text goes through `esc()`** — it builds an
-  `innerHTML` string, so an unescaped `<` in a reflection would silently eat the
-  rest of the line.
+- `renderHistory()` — union of intention, reflection, *and* `wakeLog` dates
+  (a day where you only checked in still belongs in the record), newest first,
+  future dates filtered out. Shows `HISTORY_DEFAULT` (7); the toggle expands to
+  `HISTORY_MAX` (30). **All interpolated text goes through `esc()`** — it builds
+  an `innerHTML` string, so an unescaped `<` in a reflection would silently eat
+  the rest of the line.
+
+  **Nothing is ever deleted.** HISTORY_MAX is a display ceiling, not a retention
+  policy — every day you have ever logged stays in `localStorage`. Text is
+  measured in bytes and the quota is megabytes, so pruning would cost reflections
+  and buy nothing.
 - `render()` — the single "repaint everything from state" entry point.
 
 ## Colour: bands, not hardcoded values
@@ -109,6 +123,8 @@ justifies. Don't add them without the user asking:
   solo practice log doesn't need a server.
 - **Tap-to-tally rep counter.** The breathing circle already holds the simran.
 - **Data export.** Add it the day there's an actual reason to get the data out.
+- **Pruning old history.** See above — the 30-day view is a window onto the
+  data, not a limit on it.
 - **Push notifications / alarms.** The app is where you arrive once awake; it
   isn't trying to be the alarm clock.
 

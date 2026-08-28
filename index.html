@@ -372,6 +372,10 @@ footer{
       <label>What will I do differently tomorrow?</label>
       <textarea id="r3"></textarea>
     </div>
+    <div class="field">
+      <label>Tomorrow's sankalp — one intention to wake into</label>
+      <textarea id="r4" placeholder="It will be waiting in the sankalp box when you rise."></textarea>
+    </div>
     <div class="save-row">
       <button class="btn-primary" id="saveReflection">Save today's reflection</button>
       <span class="saved-note" id="reflectionStatus"></span>
@@ -379,8 +383,9 @@ footer{
   </section>
 
   <section>
-    <h2>Your last 7 days</h2>
+    <h2 id="historyHeading">Your last 7 days</h2>
     <div id="historyList"><div class="history-empty">Nothing logged yet — your history builds as you go.</div></div>
+    <button class="btn-ghost" id="historyToggle" style="display:none; margin-top:20px;">Show all 30 days</button>
   </section>
 
   <footer>rise early · sit quiet · carry it through the day</footer>
@@ -390,6 +395,11 @@ footer{
 const STORAGE_KEY = 'amrit-vela-data';
 let state = { wakeLog: [], intentions: {}, reflections: {}, meditation: {}, targetTime: '05:00' };
 let sessionSeconds = 0;
+// How much history the section shows. Nothing is ever deleted — HISTORY_MAX is
+// only how far back the expanded view reaches.
+const HISTORY_DEFAULT = 7;
+const HISTORY_MAX = 30;
+let historyExpanded = false;
 let simInterval = null;
 let simRunning = false;
 
@@ -404,6 +414,12 @@ function dateStr(d){
 
 function todayStr(){
   return dateStr(new Date());
+}
+
+function tomorrowStr(){
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return dateStr(d);
 }
 
 function esc(s){
@@ -607,19 +623,46 @@ document.getElementById('saveReflection').addEventListener('click', async () => 
     gratitude: document.getElementById('r2').value.trim(),
     tomorrow: document.getElementById('r3').value.trim(),
   };
+
+  // Tomorrow's sankalp is stored under tomorrow's own date, so render() picks
+  // it up as "today's intention" when you next open the app.
+  const plan = document.getElementById('r4').value.trim();
+  const t = tomorrowStr();
+  if(plan) state.intentions[t] = plan;
+  else delete state.intentions[t];
+
   const ok = await saveState();
   flash(document.getElementById('reflectionStatus'), ok);
+  renderHistory();
+});
+
+document.getElementById('historyToggle').addEventListener('click', () => {
+  historyExpanded = !historyExpanded;
   renderHistory();
 });
 
 // ---- History ----
 function renderHistory(){
   const list = document.getElementById('historyList');
+  const heading = document.getElementById('historyHeading');
+  const toggle = document.getElementById('historyToggle');
+  const today = todayStr();
+
   const dates = new Set([
     ...Object.keys(state.reflections),
     ...Object.keys(state.intentions),
+    ...state.wakeLog.map(e => e.date),
   ]);
-  const sorted = [...dates].sort().reverse().slice(0,7);
+  // Tomorrow's sankalp is filed under tomorrow — a plan, not history yet.
+  const all = [...dates].filter(d => d <= today).sort().reverse();
+  const limit = historyExpanded ? HISTORY_MAX : HISTORY_DEFAULT;
+  const sorted = all.slice(0, limit);
+
+  heading.textContent = `Your last ${limit} days`;
+  toggle.style.display = all.length > HISTORY_DEFAULT ? 'inline-block' : 'none';
+  toggle.textContent = historyExpanded
+    ? `Show last ${HISTORY_DEFAULT} days`
+    : `Show all ${Math.min(all.length, HISTORY_MAX)} days`;
 
   if(sorted.length === 0){
     list.innerHTML = '<div class="history-empty">Nothing logged yet — your history builds as you go.</div>';
@@ -633,8 +676,9 @@ function renderHistory(){
     let parts = [];
     if(wake) parts.push(`Woke at ${esc(wake.time)}`);
     if(intention) parts.push(`Intention: ${esc(intention)}`);
-    if(refl && refl.gratitude) parts.push(`Grateful for: ${esc(refl.gratitude)}`);
     if(refl && refl.presence) parts.push(`Presence: ${esc(refl.presence)}`);
+    if(refl && refl.gratitude) parts.push(`Grateful for: ${esc(refl.gratitude)}`);
+    if(refl && refl.tomorrow) parts.push(`Differently tomorrow: ${esc(refl.tomorrow)}`);
     return `<div class="history-item"><div class="history-date">${esc(date)}</div>${parts.join('<br>') || '<span class="history-empty">No details</span>'}</div>`;
   }).join('');
 }
@@ -656,6 +700,8 @@ function render(){
     document.getElementById('r2').value = state.reflections[today].gratitude || '';
     document.getElementById('r3').value = state.reflections[today].tomorrow || '';
   }
+  const plan = state.intentions[tomorrowStr()];
+  if(plan) document.getElementById('r4').value = plan;
 }
 </script>
 

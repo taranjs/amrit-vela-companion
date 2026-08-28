@@ -13,8 +13,11 @@ Four movements, in the order a day actually runs:
 - **Simran** — a breathing circle to sit with, and minutes logged when you're
   done.
 - **Today's sankalp** — one intention to carry through the day.
-- **Evening reflection** — three lines before sleep: where you noticed
-  Waheguru's presence, what you're grateful for, what you'll do differently.
+- **Evening reflection** — four lines before sleep: where you noticed
+  Waheguru's presence, what you're grateful for, what you'll do differently,
+  and tomorrow's sankalp — which is waiting in the sankalp box when you rise.
+
+Your last 7 days sit at the bottom, expandable to 30. Nothing is ever deleted.
 
 The page itself follows the sky, shifting through night, amrit vela, dawn, and
 daylight as the hours pass.
