@@ -17,6 +17,10 @@ Four movements, in the order a day actually runs:
   Waheguru's presence, what you're grateful for, what you'll do differently,
   and tomorrow's sankalp — which is waiting in the sankalp box when you rise.
 
+If a night gets away from you, the reflection isn't lost. Past midnight it still
+knows you mean last night, and the `‹ ›` arrows step back up to a week to fill in
+one you missed.
+
 Your last 7 days sit at the bottom, expandable to 30. Nothing is ever deleted.
 
 The page itself follows the sky, shifting through night, amrit vela, dawn, and

@@ -266,6 +266,26 @@ textarea:focus, .journal-input:focus{ outline:2px solid var(--accent); outline-o
   font-family:'JetBrains Mono', monospace;
 }
 
+/* Reflection day picker */
+.day-nav{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin:-14px 0 22px;
+  font-size:13px;
+}
+.day-nav .day-label{
+  font-family:'JetBrains Mono', monospace;
+  color:var(--accent);
+}
+.day-nav button{
+  padding:3px 13px;
+  font-size:15px;
+  line-height:1.5;
+}
+.day-nav button:disabled{ opacity:0.25; cursor:default; }
+.day-nav button:disabled:hover{ border-color:rgba(var(--fg-rgb),0.3); color:var(--fg); }
+
 /* History */
 .history-item{
   padding:14px 0;
@@ -360,6 +380,11 @@ footer{
   <section>
     <h2>Evening reflection</h2>
     <p class="sub">Three lines before you sleep. This becomes your record of the days you're actually living toward Waheguru, not just planning to.</p>
+    <div class="day-nav">
+      <button class="btn-ghost" id="reflPrev" aria-label="An earlier night">&lsaquo;</button>
+      <span class="day-label" id="reflDayLabel">tonight</span>
+      <button class="btn-ghost" id="reflNext" aria-label="A later night">&rsaquo;</button>
+    </div>
     <div class="field">
       <label>Where did I notice Waheguru's presence today?</label>
       <textarea id="r1" placeholder="A moment, a person, a feeling..."></textarea>
@@ -372,7 +397,7 @@ footer{
       <label>What will I do differently tomorrow?</label>
       <textarea id="r3"></textarea>
     </div>
-    <div class="field">
+    <div class="field" id="sankalpField">
       <label>Tomorrow's sankalp — one intention to wake into</label>
       <textarea id="r4" placeholder="It will be waiting in the sankalp box when you rise."></textarea>
     </div>
@@ -400,6 +425,11 @@ let sessionSeconds = 0;
 const HISTORY_DEFAULT = 7;
 const HISTORY_MAX = 30;
 let historyExpanded = false;
+
+// How far back you can step to fill in a night you missed. Long enough to catch
+// a forgotten evening, short enough that this stays a practice and not a diary.
+const BACKFILL_MAX = 7;
+let reflectionOffset = 0;
 let simInterval = null;
 let simRunning = false;
 
@@ -416,10 +446,27 @@ function todayStr(){
   return dateStr(new Date());
 }
 
-function tomorrowStr(){
+function nextDayStr(d){
+  const n = new Date(d);
+  n.setDate(n.getDate() + 1);
+  return dateStr(n);
+}
+
+// The night an evening reflection belongs to. Before 3am you haven't slept yet
+// — the app's own sky bands still call that night, not a new day — so what you
+// sit down to write at 00:30 is yesterday's reflection, filed under yesterday.
+function naturalReflectionDate(){
   const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return dateStr(d);
+  if(d.getHours() < 3) d.setDate(d.getDate() - 1);
+  return d;
+}
+
+// ...and the night you're actually looking at, once you've stepped back to fill
+// one in.
+function reflectionDate(){
+  const d = naturalReflectionDate();
+  d.setDate(d.getDate() - reflectionOffset);
+  return d;
 }
 
 function esc(s){
@@ -616,25 +663,73 @@ document.getElementById('saveIntention').addEventListener('click', async () => {
 });
 
 // ---- Reflection ----
+// Fills the form with whichever night is selected, and tells you which one it is.
+function renderReflection(){
+  const d = reflectionDate();
+  const ds = dateStr(d);
+  const natural = dateStr(naturalReflectionDate());
+  const isNatural = ds === natural;
+
+  const refl = state.reflections[ds] || {};
+  document.getElementById('r1').value = refl.presence || '';
+  document.getElementById('r2').value = refl.gratitude || '';
+  document.getElementById('r3').value = refl.tomorrow || '';
+
+  // A sankalp is only for a day still ahead of you. When you're filling in an
+  // older night, hide it rather than overwrite an intention already lived.
+  document.getElementById('sankalpField').style.display = isNatural ? '' : 'none';
+  document.getElementById('r4').value =
+    isNatural ? (state.intentions[nextDayStr(d)] || '') : '';
+
+  const label = isNatural
+    ? (natural === todayStr() ? "tonight" : "last night")
+    : d.toLocaleDateString([], {weekday:'short', day:'numeric', month:'short'});
+  document.getElementById('reflDayLabel').textContent = label;
+  document.getElementById('saveReflection').textContent =
+    isNatural ? `Save ${label}'s reflection` : `Save ${label}`;
+
+  document.getElementById('reflPrev').disabled = reflectionOffset >= BACKFILL_MAX;
+  document.getElementById('reflNext').disabled = reflectionOffset <= 0;
+  document.getElementById('reflectionStatus').textContent = '';
+}
+
+document.getElementById('reflPrev').addEventListener('click', () => {
+  if(reflectionOffset < BACKFILL_MAX){ reflectionOffset++; renderReflection(); }
+});
+document.getElementById('reflNext').addEventListener('click', () => {
+  if(reflectionOffset > 0){ reflectionOffset--; renderReflection(); }
+});
+
 document.getElementById('saveReflection').addEventListener('click', async () => {
-  const today = todayStr();
-  state.reflections[today] = {
+  const d = reflectionDate();
+  const ds = dateStr(d);
+  const entry = {
     presence: document.getElementById('r1').value.trim(),
     gratitude: document.getElementById('r2').value.trim(),
     tomorrow: document.getElementById('r3').value.trim(),
   };
+  // An all-blank save shouldn't leave an empty day sitting in your history.
+  if(entry.presence || entry.gratitude || entry.tomorrow) state.reflections[ds] = entry;
+  else delete state.reflections[ds];
 
-  // Tomorrow's sankalp is stored under tomorrow's own date, so render() picks
-  // it up as "today's intention" when you next open the app.
-  const plan = document.getElementById('r4').value.trim();
-  const t = tomorrowStr();
-  if(plan) state.intentions[t] = plan;
-  else delete state.intentions[t];
+  // The sankalp is filed under the day it's for, so render() picks it up as
+  // "today's intention" when you next open the app. Offered for the current
+  // night only — see renderReflection().
+  if(isNaturalNight(ds)){
+    const plan = document.getElementById('r4').value.trim();
+    const t = nextDayStr(d);
+    if(plan) state.intentions[t] = plan;
+    else delete state.intentions[t];
+  }
 
   const ok = await saveState();
   flash(document.getElementById('reflectionStatus'), ok);
   renderHistory();
 });
+
+function isNaturalNight(ds){
+  return ds === dateStr(naturalReflectionDate());
+}
 
 document.getElementById('historyToggle').addEventListener('click', () => {
   historyExpanded = !historyExpanded;
@@ -691,17 +786,10 @@ loadState().then(() => { renderWake(); renderHistory(); });
 function render(){
   renderWake();
   renderHistory();
-  // repopulate today's fields if they exist
+  renderReflection();
   const today = todayStr();
   document.getElementById('targetTime').value = state.targetTime || '05:00';
   if(state.intentions[today]) document.getElementById('intentionInput').value = state.intentions[today];
-  if(state.reflections[today]){
-    document.getElementById('r1').value = state.reflections[today].presence || '';
-    document.getElementById('r2').value = state.reflections[today].gratitude || '';
-    document.getElementById('r3').value = state.reflections[today].tomorrow || '';
-  }
-  const plan = state.intentions[tomorrowStr()];
-  if(plan) document.getElementById('r4').value = plan;
 }
 </script>
 

@@ -36,8 +36,8 @@ state = {
 ```
 
 **Tomorrow's sankalp is not a separate field.** The evening reflection's last
-box writes to `intentions[tomorrowStr()]` — the intention filed under the day
-it's meant for. `render()` then prefills the sankalp box from
+box writes to `intentions[nextDayStr(reflectionDate())]` — the intention filed
+under the day it's meant for. `render()` then prefills the sankalp box from
 `intentions[todayStr()]` with no extra logic, so last night's resolve is simply
 waiting when you rise. The one consequence: `intentions` can hold a future date,
 which is why `renderHistory()` filters to `d <= today`.
@@ -57,6 +57,26 @@ date, so a 4am check-in anywhere east of UTC lands on the previous day — in
 India, Japan, and New Zealand every single amrit vela check-in was filed under
 yesterday. An app about the hours before dawn has to use the dawn you're
 standing in. `computeStreak()` walks backward with the same helper.
+
+### The reflection belongs to a *night*, not to `todayStr()`
+
+`naturalReflectionDate()` returns today, **or yesterday when the clock reads
+before 3am** — the app's own sky bands already call 00:00–03:00 night, and
+someone writing at 00:30 has not yet slept. Filing that under `todayStr()` put
+the reflection on the wrong day and pushed the sankalp a day late.
+
+On top of that, `reflectionOffset` (0…`BACKFILL_MAX`, 7) lets you step back to a
+night you missed. `reflectionDate()` = natural date minus the offset;
+`renderReflection()` repaints the form, the `‹ tonight ›` label, the save button
+text, and the arrows' disabled states from it.
+
+Two rules that fall out of backfilling, both already enforced:
+
+- **The sankalp box is hidden when the offset isn't 0.** A sankalp for a day
+  already lived would silently overwrite `intentions[thatDay+1]`, which is a
+  real record. `isNaturalNight(ds)` guards the write as well as the display.
+- **An all-blank save deletes the entry** rather than filing an empty object,
+  so paging through past nights can't litter the history with hollow days.
 
 ## Architecture (vanilla JS, no framework)
 
@@ -80,6 +100,8 @@ standing in. `computeStreak()` walks backward with the same helper.
   policy — every day you have ever logged stays in `localStorage`. Text is
   measured in bytes and the quota is megabytes, so pruning would cost reflections
   and buy nothing.
+- `renderReflection()` — see above; also the only place that clears
+  `#reflectionStatus`, so a stale "Saved ✓" never follows you to another night.
 - `render()` — the single "repaint everything from state" entry point.
 
 ## Colour: bands, not hardcoded values
@@ -127,6 +149,10 @@ justifies. Don't add them without the user asking:
   data, not a limit on it.
 - **Push notifications / alarms.** The app is where you arrive once awake; it
   isn't trying to be the alarm clock.
+- **Backfilling the wake check-in.** Reflection is recollection and survives a
+  day's delay; a check-in is a timestamp, and one typed in after the fact is
+  just a number you chose. The streak stays honest because it can only be
+  earned live.
 
 ## Conventions to keep
 
