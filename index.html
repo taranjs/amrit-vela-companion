@@ -353,6 +353,18 @@ footer{
   </section>
 
   <section>
+    <h2>Today's sankalp</h2>
+    <p class="sub">One intention to carry through the day. Short is fine.</p>
+    <div class="field">
+      <textarea id="intentionInput" placeholder="e.g. I will meet today's irritations with patience, not reaction."></textarea>
+    </div>
+    <div class="save-row">
+      <button class="btn-primary" id="saveIntention">Save intention</button>
+      <span class="saved-note" id="intentionStatus"></span>
+    </div>
+  </section>
+
+  <section>
     <h2>Simran</h2>
     <p class="sub">A few quiet minutes with the Naam. Let your breath carry "Waheguru" — in on the first syllable, out on the second. Tap start when you're ready.</p>
     <div class="breathe-wrap">
@@ -362,18 +374,6 @@ footer{
         <button class="btn-primary" id="simStart">Start</button>
         <button class="btn-ghost" id="simStop" style="display:none;">Finish & log</button>
       </div>
-    </div>
-  </section>
-
-  <section>
-    <h2>Today's sankalp</h2>
-    <p class="sub">One intention to carry through the day. Short is fine.</p>
-    <div class="field">
-      <textarea id="intentionInput" placeholder="e.g. I will meet today's irritations with patience, not reaction."></textarea>
-    </div>
-    <div class="save-row">
-      <button class="btn-primary" id="saveIntention">Save intention</button>
-      <span class="saved-note" id="intentionStatus"></span>
     </div>
   </section>
 
@@ -408,6 +408,15 @@ footer{
   </section>
 
   <section>
+    <h2>Rest</h2>
+    <p class="sub" id="sleepAdvice">Press this when you put the day down. Paired with your morning check-in, it learns how much sleep actually gets you up in amrit vela.</p>
+    <div class="wake-row">
+      <button class="btn-primary" id="sleepBtn">Sleeping now</button>
+      <span class="saved-note" id="sleepStatus"></span>
+    </div>
+  </section>
+
+  <section>
     <h2 id="historyHeading">Your last 7 days</h2>
     <div id="historyList"><div class="history-empty">Nothing logged yet — your history builds as you go.</div></div>
     <button class="btn-ghost" id="historyToggle" style="display:none; margin-top:20px;">Show all 30 days</button>
@@ -418,7 +427,14 @@ footer{
 
 <script>
 const STORAGE_KEY = 'amrit-vela-data';
-let state = { wakeLog: [], intentions: {}, reflections: {}, meditation: {}, targetTime: '05:00' };
+let state = { wakeLog: [], intentions: {}, reflections: {}, meditation: {}, sleepLog: {}, targetTime: '05:00' };
+
+// A night needs this much sleep to count as a real one. Outside it you either
+// pressed "Sleeping now" by mistake or slept through an illness — either way
+// it shouldn't drag the median that suggests your bedtime.
+const SLEEP_MIN = 120;   // 2h
+const SLEEP_MAX = 840;   // 14h
+const SLEEP_SAMPLE = 3;  // good mornings needed before suggesting anything
 let sessionSeconds = 0;
 // How much history the section shows. Nothing is ever deleted — HISTORY_MAX is
 // only how far back the expanded view reaches.
@@ -469,6 +485,29 @@ function reflectionDate(){
   return d;
 }
 
+function prevDayStr(ds){
+  // Noon, not midnight — parsing 'YYYY-MM-DD' alone gives UTC, and noon keeps
+  // the arithmetic clear of any DST shift.
+  const d = new Date(ds + 'T12:00');
+  d.setDate(d.getDate() - 1);
+  return dateStr(d);
+}
+
+function toMins(t){
+  const [h, m] = t.split(':').map(Number);
+  return h*60 + m;
+}
+
+function fmtTime(mins){
+  mins = ((mins % 1440) + 1440) % 1440;
+  return String(Math.floor(mins/60)).padStart(2,'0') + ':' + String(mins%60).padStart(2,'0');
+}
+
+function fmtDur(mins){
+  const h = Math.floor(mins/60), m = mins % 60;
+  return h + 'h' + (m ? ' ' + String(m).padStart(2,'0') + 'm' : '');
+}
+
 function esc(s){
   return String(s).replace(/[&<>"']/g, c =>
     ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
@@ -484,6 +523,7 @@ async function loadState(){
       state.intentions = state.intentions || {};
       state.reflections = state.reflections || {};
       state.meditation = state.meditation || {};
+      state.sleepLog = state.sleepLog || {};
       state.targetTime = state.targetTime || '05:00';
     }
   }catch(e){
@@ -613,6 +653,77 @@ document.getElementById('targetTime').addEventListener('change', async (e) => {
   state.targetTime = e.target.value || '05:00';
   await saveState();
   renderWake();
+  renderSleep();
+});
+
+// ---- Rest ----
+// A night is a bedtime joined to the check-in of the morning after it: you
+// press "Sleeping now" on the night of the 13th and "I'm up" on the 14th.
+// Nothing here is inferred — an unpressed button simply means no night.
+function sleepNights(){
+  const out = [];
+  state.wakeLog.forEach(e => {
+    const bed = state.sleepLog[prevDayStr(e.date)];
+    if(!bed) return;
+    let mins = toMins(e.time) - toMins(bed);
+    if(mins < 0) mins += 1440;   // you went to bed before midnight
+    if(mins < SLEEP_MIN || mins > SLEEP_MAX) return;
+    out.push({date: e.date, bed, wake: e.time, mins});
+  });
+  return out.sort((a, b) => a.date < b.date ? 1 : -1);
+}
+
+// Median, not mean — one sleepless night shouldn't move the suggestion.
+function median(ns){
+  const a = [...ns].sort((x, y) => x - y);
+  const i = Math.floor(a.length/2);
+  return a.length % 2 ? a[i] : Math.round((a[i-1] + a[i])/2);
+}
+
+function renderSleep(){
+  const night = dateStr(naturalReflectionDate());
+  const bed = state.sleepLog[night];
+  document.getElementById('sleepStatus').textContent =
+    bed ? `Asleep since ${bed} — press again if that changes` : '';
+
+  const target = state.targetTime || '05:00';
+  const nights = sleepNights();
+  const good = nights.filter(x => toMins(x.wake) <= toMins(target));
+  const parts = [];
+
+  if(nights.length){
+    const last = nights[0];
+    const when = last.date === todayStr() ? 'Last night' : 'Your last full night';
+    parts.push(`${when}: asleep ${last.bed}, up at ${last.wake} — ${fmtDur(last.mins)}.`);
+  }
+
+  // The only honest "optimum" is the one your own good mornings show: how much
+  // you had actually slept on the days you managed to rise on time.
+  if(good.length >= SLEEP_SAMPLE){
+    const need = median(good.map(x => x.mins));
+    parts.push(`On the ${good.length} mornings you rose by ${target} you had slept ${fmtDur(need)}. To rise at ${target}, be asleep by ${fmtTime(toMins(target) - need)}.`);
+  } else if(nights.length){
+    const left = SLEEP_SAMPLE - good.length;
+    parts.push(`${left} more morning${left === 1 ? '' : 's'} risen by ${target} and this can suggest a bedtime from your own nights.`);
+  } else {
+    parts.push(`Press this when you put the day down. Paired with your morning check-in, it learns how much sleep actually gets you up at ${target}.`);
+  }
+
+  document.getElementById('sleepAdvice').textContent = parts.join(' ');
+}
+
+document.getElementById('sleepBtn').addEventListener('click', async () => {
+  const night = dateStr(naturalReflectionDate());
+  const had = Object.prototype.hasOwnProperty.call(state.sleepLog, night);
+  const prev = state.sleepLog[night];
+  state.sleepLog[night] = new Date().toTimeString().slice(0,5);
+  if(!await saveState()){
+    if(had) state.sleepLog[night] = prev; else delete state.sleepLog[night];
+    flash(document.getElementById('sleepStatus'), false);
+    return;
+  }
+  renderSleep();
+  renderHistory();
 });
 
 // ---- Simran timer ----
@@ -746,6 +857,7 @@ function renderHistory(){
   const dates = new Set([
     ...Object.keys(state.reflections),
     ...Object.keys(state.intentions),
+    ...Object.keys(state.sleepLog),
     ...state.wakeLog.map(e => e.date),
   ]);
   // Tomorrow's sankalp is filed under tomorrow — a plan, not history yet.
@@ -764,6 +876,10 @@ function renderHistory(){
     return;
   }
 
+  // Keyed by the morning you woke; a night's duration is shown on the day it began.
+  const byWake = {};
+  sleepNights().forEach(x => { byWake[x.date] = x.mins; });
+
   list.innerHTML = sorted.map(date => {
     const intention = state.intentions[date];
     const refl = state.reflections[date];
@@ -774,6 +890,9 @@ function renderHistory(){
     if(refl && refl.presence) parts.push(`Presence: ${esc(refl.presence)}`);
     if(refl && refl.gratitude) parts.push(`Grateful for: ${esc(refl.gratitude)}`);
     if(refl && refl.tomorrow) parts.push(`Differently tomorrow: ${esc(refl.tomorrow)}`);
+    const bed = state.sleepLog[date];
+    const mins = byWake[nextDayStr(new Date(date + 'T12:00'))];
+    if(bed) parts.push(`Asleep at ${esc(bed)}${mins ? ` · slept ${fmtDur(mins)}` : ''}`);
     return `<div class="history-item"><div class="history-date">${esc(date)}</div>${parts.join('<br>') || '<span class="history-empty">No details</span>'}</div>`;
   }).join('');
 }
@@ -781,12 +900,13 @@ function renderHistory(){
 // ---- Init ----
 makeStars();
 updateSky();
-loadState().then(() => { renderWake(); renderHistory(); });
+loadState().then(() => { renderWake(); renderHistory(); renderSleep(); });
 
 function render(){
   renderWake();
   renderHistory();
   renderReflection();
+  renderSleep();
   const today = todayStr();
   document.getElementById('targetTime').value = state.targetTime || '05:00';
   if(state.intentions[today]) document.getElementById('intentionInput').value = state.intentions[today];

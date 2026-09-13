@@ -12,8 +12,10 @@ the day?** If it doesn't, leave it out — the quiet of this app is a
 feature, and four screens of widgets would work against the thing it's for.
 
 *Amrit vela* is the pre-dawn window (~3–6am), held in Sikh practice as the best
-hours for simran / remembrance. The app has four movements, in daily order:
-wake check-in → simran → one intention (sankalp) → evening reflection.
+hours for simran / remembrance. The app has five movements, in daily order:
+wake check-in → one intention (sankalp) → simran → evening reflection → rest.
+Sankalp sits **before** simran on purpose: you name the intention, then sit
+with it. Don't reorder them back.
 
 ## Files
 
@@ -31,6 +33,7 @@ state = {
   intentions:  { 'YYYY-MM-DD': 'text' },
   reflections: { 'YYYY-MM-DD': { presence, gratitude, tomorrow } },
   meditation:  { 'YYYY-MM-DD': minutesAsNumber },
+  sleepLog:    { 'YYYY-MM-DD': 'HH:MM' },   // keyed by NIGHT, see below
   targetTime:  'HH:MM'
 }
 ```
@@ -57,6 +60,25 @@ date, so a 4am check-in anywhere east of UTC lands on the previous day — in
 India, Japan, and New Zealand every single amrit vela check-in was filed under
 yesterday. An app about the hours before dawn has to use the dawn you're
 standing in. `computeStreak()` walks backward with the same helper.
+
+### Sleep is measured, never inferred
+
+`sleepLog` is keyed by the **night** — the same `naturalReflectionDate()` the
+reflection uses, so a bedtime pressed at 23:30 on the 13th and one pressed at
+00:40 on the 14th both land on the night of the 13th.
+
+`sleepNights()` joins each bedtime to the check-in of the *morning after* it
+(`prevDayStr(wakeDate)`), wrapping past midnight. A night outside
+`SLEEP_MIN`…`SLEEP_MAX` (2h–14h) is dropped: you either pressed the button by
+mistake or were ill, and neither should move the suggestion. An unpressed
+button is simply no night — nothing is ever guessed from a missing press.
+
+**The bedtime suggestion comes from the user's own good mornings**, not from a
+sleep-science number. `renderSleep()` takes the *median* (one bad night mustn't
+drag it) of the nights that ended in a rise at or before `targetTime`, and
+subtracts it from `targetTime`. Below `SLEEP_SAMPLE` (3) such mornings it says
+how many more are needed rather than guessing. If you ever replace this with a
+fixed "adults need 7–9 hours", you've replaced his evidence with a stranger's.
 
 ### The reflection belongs to a *night*, not to `todayStr()`
 
@@ -100,6 +122,9 @@ Two rules that fall out of backfilling, both already enforced:
   policy — every day you have ever logged stays in `localStorage`. Text is
   measured in bytes and the quota is megabytes, so pruning would cost reflections
   and buy nothing.
+- `renderSleep()` — the Rest section: tonight's logged bedtime, last night's
+  duration, and the suggested bedtime. Re-runs when `targetTime` changes, since
+  the suggestion is derived from it.
 - `renderReflection()` — see above; also the only place that clears
   `#reflectionStatus`, so a stale "Saved ✓" never follows you to another night.
 - `render()` — the single "repaint everything from state" entry point.
@@ -149,6 +174,9 @@ justifies. Don't add them without the user asking:
   data, not a limit on it.
 - **Push notifications / alarms.** The app is where you arrive once awake; it
   isn't trying to be the alarm clock.
+- **Sleep quality, stages, or anything a wearable would measure.** Two button
+  presses is the whole instrument, and it is enough to answer the only question
+  being asked: how much sleep gets him up in amrit vela.
 - **Backfilling the wake check-in.** Reflection is recollection and survives a
   day's delay; a check-in is a timestamp, and one typed in after the fact is
   just a number you chose. The streak stays honest because it can only be

@@ -10,12 +10,17 @@ Four movements, in the order a day actually runs:
 
 - **Wake check-in** — log the moment you're up. A streak forms when you rise at
   or before your target time.
+- **Today's sankalp** — one intention to carry through the day.
 - **Simran** — a breathing circle to sit with, and minutes logged when you're
   done.
-- **Today's sankalp** — one intention to carry through the day.
 - **Evening reflection** — four lines before sleep: where you noticed
   Waheguru's presence, what you're grateful for, what you'll do differently,
   and tomorrow's sankalp — which is waiting in the sankalp box when you rise.
+
+- **Rest** — press *Sleeping now* when you put the day down. Joined to the next
+  morning's check-in it gives you the night's length, and once a few mornings
+  have gone well it works backward from your target wake time to suggest a
+  bedtime — from your own nights, not from a generic number.
 
 If a night gets away from you, the reflection isn't lost. Past midnight it still
 knows you mean last night, and the `‹ ›` arrows step back up to a week to fill in
