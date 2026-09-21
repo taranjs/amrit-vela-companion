@@ -22,11 +22,19 @@ Four movements, in the order a day actually runs:
   have gone well it works backward from your target wake time to suggest a
   bedtime — from your own nights, not from a generic number.
 
+Press *I'm up* and the morning card opens: the sankalp you left waiting, and the
+day's Hukamnama from Sri Darbar Sahib. On the last day of each month — or the
+first day of the next, if you missed it — the month opens for a look back.
+
 If a night gets away from you, the reflection isn't lost. Past midnight it still
 knows you mean last night, and the `‹ ›` arrows step back up to a week to fill in
 one you missed.
 
 Your last 7 days sit at the bottom, expandable to 30. Nothing is ever deleted.
+
+Keep a backup. Everything lives in this browser and nowhere else, so a cleared
+browser would take it with it — *Save a backup* writes the lot to one JSON file,
+and restoring only ever fills gaps, never overwrites a day you already have.
 
 The page itself follows the sky, shifting through night, amrit vela, dawn, and
 daylight as the hours pass.
@@ -44,10 +52,13 @@ live.
 
 ## Your data
 
-Everything stays in your browser's `localStorage` under a single key. Nothing
-is uploaded, there's no account, and no server ever sees a word of it. The
-flip side: it's tied to one browser on one device, and clearing your site data
-clears your history with it.
+Everything stays in your browser's `localStorage` under a single key. There's
+no account and no server. The app makes exactly one network request — asking
+GurbaniNow for the day's Hukamnama, once a day — and it sends nothing with it.
+No reflection, intention, wake time or sleep time has ever left your device.
+
+The flip side is that your record is tied to one browser on one device, and
+clearing your site data would clear it. That is what the backup file is for.
 
 ## Contributing
 

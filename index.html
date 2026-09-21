@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#0D0E24">
 <title>Amrit Vela</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+Gurmukhi:wght@400;500&display=swap');
 
 :root{
   --night:#0D0E24;
@@ -22,6 +22,7 @@
   --fg:var(--day);       /* body text */
   --fg-rgb:245,240,230;  /* the same colour, for rgba() borders + surfaces */
   --accent:var(--gold);  /* streak numbers, dates, the breathing circle */
+  --sheet:#151635;       /* the one opaque surface: the modal */
   color-scheme:dark;     /* native time picker follows the sky */
 }
 
@@ -29,6 +30,7 @@ html[data-band="dawn"], html[data-band="day"]{
   --fg:var(--ink);
   --fg-rgb:42,39,64;
   --accent:#8A5F17;      /* deeper amber; --gold fails contrast on cream */
+  --sheet:#FBF7EF;
   color-scheme:light;
 }
 
@@ -304,6 +306,52 @@ textarea:focus, .journal-input:focus{ outline:2px solid var(--accent); outline-o
   font-style:italic;
 }
 
+/* One modal, two callers: the morning card and the month's look back. */
+.modal-back{
+  position:fixed; inset:0; z-index:50;
+  display:flex; align-items:center; justify-content:center;
+  padding:20px;
+  background:rgba(5,5,18,0.72);
+}
+.modal-back[hidden]{ display:none; }
+.modal{
+  background:var(--sheet);
+  color:var(--fg);
+  border:1px solid rgba(var(--fg-rgb),0.15);
+  border-radius:18px;
+  padding:26px;
+  width:100%; max-width:560px;
+  max-height:85vh; overflow-y:auto;
+  box-shadow:0 24px 60px rgba(0,0,0,0.45);
+}
+.modal h3{ font-family:'Fraunces',serif; font-weight:500; font-size:24px; margin:0 0 14px; }
+.modal h4{
+  font-size:11px; letter-spacing:0.14em; text-transform:uppercase;
+  opacity:0.55; margin:26px 0 10px; font-weight:600;
+}
+.modal a{ color:var(--accent); }
+.modal-lead{ font-size:15px; line-height:1.6; margin:0; }
+.modal-quiet{ font-size:13px; opacity:0.6; line-height:1.6; margin:0; }
+.sankalp-echo{ font-family:'Fraunces',serif; font-size:19px; line-height:1.5; margin:0; }
+.hukam-line{ margin-bottom:15px; }
+.hukam-line .g{
+  font-family:'Noto Sans Gurmukhi','Gurmukhi MN',sans-serif;
+  font-size:17px; line-height:1.9;
+}
+.hukam-line .e{ font-size:13px; opacity:0.68; line-height:1.55; margin-top:3px; }
+.month-stat{ font-size:14px; line-height:1.7; }
+.month-stat b{ font-family:'JetBrains Mono',monospace; color:var(--accent); font-weight:500; }
+.month-day{ margin-bottom:15px; font-size:14px; line-height:1.55; }
+.month-day .d{
+  font-family:'JetBrains Mono',monospace; font-size:11px;
+  color:var(--accent); display:block; margin-bottom:2px;
+}
+.link-btn{
+  background:none; border:none; padding:0;
+  font-size:12px; font-family:'JetBrains Mono',monospace;
+  color:var(--accent); text-decoration:underline; cursor:pointer;
+}
+
 footer{
   text-align:center;
   font-size:12px;
@@ -335,6 +383,7 @@ footer{
     <div class="wake-row">
       <button class="btn-primary" id="checkInBtn">I'm up</button>
       <span class="saved-note" id="checkInStatus"></span>
+      <button class="link-btn" id="openMorning" style="display:none;">open this morning's card</button>
     </div>
     <div class="target-row">
       Target wake time:
@@ -419,11 +468,33 @@ footer{
   <section>
     <h2 id="historyHeading">Your last 7 days</h2>
     <div id="historyList"><div class="history-empty">Nothing logged yet — your history builds as you go.</div></div>
-    <button class="btn-ghost" id="historyToggle" style="display:none; margin-top:20px;">Show all 30 days</button>
+    <div class="wake-row" style="margin-top:20px;">
+      <button class="btn-ghost" id="historyToggle" style="display:none;">Show all 30 days</button>
+      <button class="btn-ghost" id="reviewBtn">Look back at a month</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Your record</h2>
+    <p class="sub" id="backupNote">Everything lives in this browser and nowhere else. A backup is one file you keep — take one now and again so a cleared browser can't cost you a year of reflections.</p>
+    <div class="wake-row">
+      <button class="btn-primary" id="backupBtn">Save a backup</button>
+      <button class="btn-ghost" id="restoreBtn">Restore from a backup</button>
+      <input type="file" id="restoreInput" accept="application/json,.json" style="display:none;">
+      <span class="saved-note" id="restoreStatus"></span>
+    </div>
   </section>
 
   <footer>rise early · sit quiet · carry it through the day</footer>
 </main>
+
+<div class="modal-back" id="modalBack" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <h3 id="modalTitle"></h3>
+    <div id="modalBody"></div>
+    <button class="btn-ghost" id="modalClose" style="margin-top:24px;">Close</button>
+  </div>
+</div>
 
 <script>
 const STORAGE_KEY = 'amrit-vela-data';
@@ -435,6 +506,10 @@ let state = { wakeLog: [], intentions: {}, reflections: {}, meditation: {}, slee
 const SLEEP_MIN = 120;   // 2h
 const SLEEP_MAX = 840;   // 14h
 const SLEEP_SAMPLE = 3;  // good mornings needed before suggesting anything
+
+// The day's Hukamnama from Sri Darbar Sahib. Free, keyless, CORS-open, and
+// fetched at most once a day — the rest of the day comes from state.hukam.
+const HUKAM_URL = 'https://api.gurbaninow.com/v2/hukamnama/today';
 let sessionSeconds = 0;
 // How much history the section shows. Nothing is ever deleted — HISTORY_MAX is
 // only how far back the expanded view reaches.
@@ -505,6 +580,7 @@ function fmtTime(mins){
 
 function fmtDur(mins){
   const h = Math.floor(mins/60), m = mins % 60;
+  if(!h) return m + 'm';   // a 37-minute month shouldn't read "0h 37m"
   return h + 'h' + (m ? ' ' + String(m).padStart(2,'0') + 'm' : '');
 }
 
@@ -629,6 +705,7 @@ function renderWake(){
   const already = state.wakeLog.find(e => e.date === today);
   document.getElementById('checkInBtn').disabled = !!already;
   document.getElementById('checkInStatus').textContent = already ? `Logged today at ${already.time}` : '';
+  document.getElementById('openMorning').style.display = already ? 'inline' : 'none';
   document.getElementById('streakNum').textContent = computeStreak();
   document.getElementById('totalNum').textContent = state.wakeLog.length;
 }
@@ -647,6 +724,7 @@ document.getElementById('checkInBtn').addEventListener('click', async () => {
   }
   renderWake();
   renderHistory();
+  showMorning();
 });
 
 document.getElementById('targetTime').addEventListener('change', async (e) => {
@@ -897,16 +975,288 @@ function renderHistory(){
   }).join('');
 }
 
+// ---- Modal ----
+const modalBack = document.getElementById('modalBack');
+let modalReturnFocus = null;
+
+function openModal(title, html){
+  document.getElementById('modalTitle').textContent = title;
+  document.getElementById('modalBody').innerHTML = html;
+  modalReturnFocus = document.activeElement;
+  modalBack.hidden = false;
+  document.body.style.overflow = 'hidden';
+  document.getElementById('modalClose').focus();
+}
+
+function closeModal(){
+  modalBack.hidden = true;
+  document.body.style.overflow = '';
+  if(modalReturnFocus && modalReturnFocus.focus) modalReturnFocus.focus();
+}
+
+document.getElementById('modalClose').addEventListener('click', closeModal);
+modalBack.addEventListener('click', e => { if(e.target === modalBack) closeModal(); });
+document.addEventListener('keydown', e => {
+  if(e.key === 'Escape' && !modalBack.hidden) closeModal();
+});
+
+// ---- The morning card ----
+// Fetched once a day and kept in state, so a 5am with no signal still shows
+// yesterday's nothing rather than an error, and the day's second look is free.
+async function getHukam(){
+  const today = todayStr();
+  if(state.hukam && state.hukam.date === today) return state.hukam;
+
+  const res = await fetch(HUKAM_URL);
+  if(!res.ok) throw new Error('HTTP ' + res.status);
+  const d = await res.json();
+  const info = d.hukamnamainfo || {};
+  const hukam = {
+    date: today,
+    ang: info.pageno || null,
+    writer: (info.writer || {}).english || '',
+    raag: (info.raag || {}).english || '',
+    lines: (d.hukamnama || []).map(x => ({
+      g: ((x.line || {}).gurmukhi || {}).unicode || '',
+      e: ((((x.line || {}).translation || {}).english) || {}).default || '',
+    })).filter(l => l.g),
+  };
+  if(!hukam.lines.length) throw new Error('no lines');
+
+  state.hukam = hukam;
+  await saveState();
+  return hukam;
+}
+
+function hukamHtml(h){
+  const cite = [h.writer, h.raag, h.ang ? 'Ang ' + h.ang : ''].filter(Boolean).join(' · ');
+  return h.lines.map(l =>
+      `<div class="hukam-line"><div class="g">${esc(l.g)}</div><div class="e">${esc(l.e)}</div></div>`
+    ).join('')
+    + `<p class="modal-quiet" style="margin-top:18px;">${esc(cite)}<br>`
+    + `Hukamnama of the day, Sri Darbar Sahib \u2014 via `
+    + `<a href="https://gurbaninow.com" target="_blank" rel="noopener">GurbaniNow</a>.</p>`;
+}
+
+function morningHtml(){
+  const today = todayStr();
+  const wake = state.wakeLog.find(e => e.date === today);
+  const intention = state.intentions[today];
+  return `<p class="modal-lead">You're up${wake ? ' at ' + esc(wake.time) : ''}. The day is yours from here.</p>`
+    + `<h4>Today's sankalp</h4>`
+    + (intention
+        ? `<p class="sankalp-echo">${esc(intention)}</p>`
+        : `<p class="modal-quiet">Nothing set yet. The sankalp box is just below \u2014 and tonight's reflection can leave one waiting here tomorrow.</p>`)
+    + `<h4>Hukamnama</h4>`
+    + `<div id="hukamSlot"><p class="modal-quiet">Opening today's Hukamnama\u2026</p></div>`;
+}
+
+async function showMorning(){
+  openModal('This morning', morningHtml());
+  const slot = document.getElementById('hukamSlot');
+  try{
+    slot.innerHTML = hukamHtml(await getHukam());
+  }catch(e){
+    slot.innerHTML = `<p class="modal-quiet">The Hukamnama needs a connection and there isn't one right now. Your sankalp doesn't.</p>`;
+  }
+}
+
+document.getElementById('openMorning').addEventListener('click', showMorning);
+
+// ---- The month, looked back on ----
+function ym(d){ return dateStr(d).slice(0, 7); }
+
+function monthDates(m){
+  const set = new Set([
+    ...Object.keys(state.reflections),
+    ...Object.keys(state.intentions),
+    ...Object.keys(state.sleepLog),
+    ...state.wakeLog.map(e => e.date),
+  ]);
+  return [...set].filter(d => d.startsWith(m)).sort();
+}
+
+function monthName(m){
+  return new Date(m + '-01T12:00').toLocaleDateString([], {month:'long', year:'numeric'});
+}
+
+function monthReviewHtml(m){
+  const target = state.targetTime || '05:00';
+  const wakes = state.wakeLog.filter(e => e.date.startsWith(m));
+  const onTime = wakes.filter(e => toMins(e.time) <= toMins(target));
+  const simran = Object.keys(state.meditation)
+    .filter(d => d.startsWith(m))
+    .reduce((a, d) => a + (state.meditation[d] || 0), 0);
+  const nights = sleepNights().filter(x => x.date.startsWith(m));
+
+  let h = '<div class="month-stat">';
+  h += `<b>${onTime.length}</b> of <b>${wakes.length}</b> logged mornings you rose by ${esc(target)}.<br>`;
+  if(simran) h += `<b>${fmtDur(simran)}</b> sat with the Naam.<br>`;
+  if(nights.length) h += `A typical night was <b>${fmtDur(median(nights.map(x => x.mins)))}</b>.`;
+  h += '</div>';
+
+  // The numbers are the smaller half. This is the part worth keeping.
+  const days = monthDates(m).filter(d => {
+    const r = state.reflections[d];
+    return r && (r.presence || r.gratitude);
+  }).reverse();
+
+  if(days.length){
+    h += '<h4>What you noticed</h4>';
+    h += days.map(d => {
+      const r = state.reflections[d];
+      const bits = [];
+      if(r.presence) bits.push(esc(r.presence));
+      if(r.gratitude) bits.push('Grateful for: ' + esc(r.gratitude));
+      return `<div class="month-day"><span class="d">${esc(d)}</span>${bits.join('<br>')}</div>`;
+    }).join('');
+  }else{
+    h += '<h4>What you noticed</h4><p class="modal-quiet">No reflections written this month. The month still happened \u2014 next one can hold more of it.</p>';
+  }
+  return h;
+}
+
+function showMonthReview(m){
+  openModal(monthName(m) + ', looking back', monthReviewHtml(m));
+}
+
+function isLastDayOfMonth(d){
+  const t = new Date(d);
+  t.setDate(t.getDate() + 1);
+  return t.getDate() === 1;
+}
+
+// On the last day of the month it's this month; any day after, it's the month
+// just gone — so missing the 30th doesn't cost you the review, it just arrives
+// on the 1st instead.
+function pendingReviewMonth(){
+  const now = new Date();
+  let target;
+  if(isLastDayOfMonth(now)){
+    target = ym(now);
+  }else{
+    const p = new Date(now);
+    p.setDate(0);
+    target = ym(p);
+  }
+  if(state.lastReview === target) return null;
+  return monthDates(target).length ? target : null;
+}
+
+document.getElementById('reviewBtn').addEventListener('click', () => {
+  const p = new Date();
+  p.setDate(0);
+  const prev = ym(p);
+  showMonthReview(monthDates(prev).length ? prev : ym(new Date()));
+});
+
+// ---- Backup ----
+// Non-destructive by design: a restore fills gaps, it never replaces a day you
+// already have. Same rule as everywhere else here — nothing is ever deleted.
+function mergeIn(data){
+  const maps = ['intentions', 'reflections', 'meditation', 'sleepLog'];
+  const known = maps.some(k => data[k] && typeof data[k] === 'object')
+    || Array.isArray(data.wakeLog);
+  if(!known) throw new Error('not a backup');
+
+  let added = 0;
+  maps.forEach(k => {
+    const src = data[k];
+    if(!src || typeof src !== 'object') return;
+    Object.keys(src).forEach(d => {
+      if(!(d in state[k])){ state[k][d] = src[d]; added++; }
+    });
+  });
+  (Array.isArray(data.wakeLog) ? data.wakeLog : []).forEach(e => {
+    if(e && e.date && e.time && !state.wakeLog.find(x => x.date === e.date)){
+      state.wakeLog.push({date: e.date, time: e.time});
+      added++;
+    }
+  });
+  state.wakeLog.sort((a, b) => a.date < b.date ? -1 : 1);
+  return added;
+}
+
+function renderBackup(){
+  const note = document.getElementById('backupNote');
+  const base = 'Everything lives in this browser and nowhere else. A backup is one file you keep.';
+  if(!state.lastBackup){
+    note.textContent = base + ' You haven\u2019t taken one yet.';
+    return;
+  }
+  const days = Math.round(
+    (new Date(todayStr() + 'T12:00') - new Date(state.lastBackup + 'T12:00')) / 86400000);
+  const when = days <= 0 ? 'today' : days === 1 ? 'yesterday' : days + ' days ago';
+  note.textContent = base + ' Last one: ' + when + '.';
+}
+
+document.getElementById('backupBtn').addEventListener('click', async () => {
+  const blob = new Blob([JSON.stringify(state, null, 2)], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'amrit-vela-' + todayStr() + '.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+
+  state.lastBackup = todayStr();
+  await saveState();
+  renderBackup();
+  document.getElementById('restoreStatus').textContent = 'Backup saved \u2713';
+});
+
+document.getElementById('restoreBtn').addEventListener('click', () => {
+  document.getElementById('restoreInput').click();
+});
+
+document.getElementById('restoreInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  const status = document.getElementById('restoreStatus');
+  e.target.value = '';
+  if(!file) return;
+  try{
+    const added = mergeIn(JSON.parse(await file.text()));
+    if(!await saveState()) throw new Error('write failed');
+    render();
+    status.textContent = added
+      ? `Restored \u2014 ${added} day${added === 1 ? '' : 's'} added`
+      : 'Nothing new in that file';
+  }catch(err){
+    status.textContent = "That file doesn't look like an Amrit Vela backup";
+  }
+});
+
 // ---- Init ----
 makeStars();
 updateSky();
-loadState().then(() => { renderWake(); renderHistory(); renderSleep(); });
+
+// Ask the browser to treat this as data worth keeping. Unprompted, localStorage
+// is evictable under storage pressure; a granted persist() takes it out of that
+// pool. Best-effort — the backup button is the real answer.
+if(navigator.storage && navigator.storage.persist) navigator.storage.persist();
+
+loadState().then(async () => {
+  renderWake();
+  renderHistory();
+  renderSleep();
+  renderBackup();
+
+  const m = pendingReviewMonth();
+  if(m){
+    state.lastReview = m;
+    await saveState();
+    showMonthReview(m);
+  }
+});
 
 function render(){
   renderWake();
   renderHistory();
   renderReflection();
   renderSleep();
+  renderBackup();
   const today = todayStr();
   document.getElementById('targetTime').value = state.targetTime || '05:00';
   if(state.intentions[today]) document.getElementById('intentionInput').value = state.intentions[today];

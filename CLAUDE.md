@@ -34,6 +34,9 @@ state = {
   reflections: { 'YYYY-MM-DD': { presence, gratitude, tomorrow } },
   meditation:  { 'YYYY-MM-DD': minutesAsNumber },
   sleepLog:    { 'YYYY-MM-DD': 'HH:MM' },   // keyed by NIGHT, see below
+  hukam:       { date, ang, writer, raag, lines: [{g, e}] },  // today's only
+  lastBackup:  'YYYY-MM-DD',
+  lastReview:  'YYYY-MM',
   targetTime:  'HH:MM'
 }
 ```
@@ -60,6 +63,48 @@ date, so a 4am check-in anywhere east of UTC lands on the previous day — in
 India, Japan, and New Zealand every single amrit vela check-in was filed under
 yesterday. An app about the hours before dawn has to use the dawn you're
 standing in. `computeStreak()` walks backward with the same helper.
+
+### The one network request, and why it's the Hukamnama
+
+`getHukam()` fetches **`api.gurbaninow.com/v2/hukamnama/today`** once a day and
+caches it in `state.hukam`. Free, keyless, CORS-open, no account. This is the
+only request the app ever makes: no reflection, intention, wake time or sleep
+time has ever left the device, and nothing should change that.
+
+The morning card was asked for as "a contextual quote from Gurbani". It is
+deliberately the day's **Hukamnama from Sri Darbar Sahib**, not a verse matched
+to the day's intention, and the reason is measured rather than aesthetic:
+BaniDB's English search (`searchtype=4`) is an unranked substring match over the
+whole corpus — "patience" returns 24,368 verses led by the Mool Mantar. Matching
+an English intention to a line would hand him an essentially arbitrary verse
+while implying it answers what he wrote. A wrong verse presented as an answer is
+worse than no verse. The Hukamnama is already the day's word, authoritative,
+and carries its own citation (writer, raag, ang), so **nothing about which
+Gurbani appears is chosen by this app or by whoever edits it.** Keep it that way.
+
+Gurbani text is escaped through `esc()` like everything else, and rendered in
+Noto Sans Gurmukhi — the one webfont added beyond the original three, because
+25 lines of a shabad in a system fallback is not good enough to read at 5am.
+
+### The month, looked back on
+
+`pendingReviewMonth()` returns this month on its last day, and otherwise the
+month just gone. Missing the 30th therefore costs nothing — the review arrives
+on the 1st instead. `state.lastReview` ('YYYY-MM') stops it reappearing, and
+the *Look back at a month* button reopens it whenever he wants, so a dismissed
+review is never a lost one.
+
+### Backup is the answer to "I don't want to lose this"
+
+`localStorage` is evictable and a cleared browser takes everything. So:
+`navigator.storage.persist()` is requested on load (best effort), and the *Your
+record* section writes the whole `state` to a JSON file.
+
+**`mergeIn()` is non-destructive: a restore fills gaps and never replaces a day
+already present.** That makes restoring safe to do twice, safe to do onto a
+populated browser, and impossible to use as a way of wiping a month. It rejects
+a file with none of the known keys rather than quietly importing junk. Keep
+both properties.
 
 ### Sleep is measured, never inferred
 
@@ -122,6 +167,10 @@ Two rules that fall out of backfilling, both already enforced:
   policy — every day you have ever logged stays in `localStorage`. Text is
   measured in bytes and the quota is megabytes, so pruning would cost reflections
   and buy nothing.
+- `openModal()` / `closeModal()` — one overlay serving two callers, the morning
+  card and the month review. Esc and a backdrop click close it; focus returns to
+  whatever opened it. `.modal-back[hidden]` needs the explicit rule because
+  `display:flex` would otherwise beat the `hidden` attribute.
 - `renderSleep()` — the Rest section: tonight's logged bedtime, last night's
   duration, and the suggested bedtime. Re-runs when `targetTime` changes, since
   the suggestion is derived from it.
@@ -169,11 +218,13 @@ justifies. Don't add them without the user asking:
 - **Multi-device sync / any backend.** `localStorage` is per-browser, and a
   solo practice log doesn't need a server.
 - **Tap-to-tally rep counter.** The breathing circle already holds the simran.
-- **Data export.** Add it the day there's an actual reason to get the data out.
 - **Pruning old history.** See above — the 30-day view is a window onto the
   data, not a limit on it.
 - **Push notifications / alarms.** The app is where you arrive once awake; it
   isn't trying to be the alarm clock.
+- **Any AI API, for anything.** Nothing here needs one, and the total running
+  cost is £0: GitHub Pages and GurbaniNow are both free, one request a day.
+- **A backend, an account, or sync.** The backup file is the portability story.
 - **Sleep quality, stages, or anything a wearable would measure.** Two button
   presses is the whole instrument, and it is enough to answer the only question
   being asked: how much sleep gets him up in amrit vela.
